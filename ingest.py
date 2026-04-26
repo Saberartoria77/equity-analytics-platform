@@ -9,10 +9,25 @@ DB_URL = os.getenv("DB_URL")
 DB_URL = DB_URL = "postgresql://postgres:Bernie1217@localhost:5432/equity_analytics"
 engine = create_engine(DB_URL)
 
+import time
+
+def fetch_with_retry(ticker: str, max_retries: int = 3):
+    for attempt in range(max_retries):
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period="5y")
+            if df.empty:
+                raise ValueError(f"Empty data for {ticker}")
+            return df
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            wait = 2 ** attempt
+            print(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait}s...")
+            time.sleep(wait)
 
 def ingest_stock(ticker: str):
-    stock = yf.Ticker(ticker)
-    df = stock.history(period="5y")
+    df = fetch_with_retry(ticker)
 
     with engine.begin() as conn:
         conn.execute(text("""
@@ -41,6 +56,12 @@ def ingest_stock(ticker: str):
 
     print(f"Done: {ticker}, {len(df)} rows inserted")
 
-
+TICKERS = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
+    "META", "TSLA", "AVGO", "ORCL", "ASML",
+    "AMD", "QCOM", "TXN", "MU", "AMAT",
+    "INTC", "ADI", "KLAC", "LRCX", "MRVL"
+]
 if __name__ == "__main__":
-    ingest_stock("AAPL")
+    for ticker in TICKERS:
+        ingest_stock(ticker)
