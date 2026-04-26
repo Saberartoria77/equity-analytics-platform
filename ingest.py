@@ -1,15 +1,30 @@
-import yfinance as yf
 import os
+import logging
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+import yfinance as yf
+import time
 
+load_dotenv()
+DB_URL = os.getenv("DB_URL")
+engine = create_engine(DB_URL)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.FileHandler("ingestion.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 load_dotenv()
 DB_URL = os.getenv("DB_URL")
 
 DB_URL = DB_URL = "postgresql://postgres:Bernie1217@localhost:5432/equity_analytics"
 engine = create_engine(DB_URL)
 
-import time
+
 
 def fetch_with_retry(ticker: str, max_retries: int = 3):
     for attempt in range(max_retries):
@@ -23,7 +38,7 @@ def fetch_with_retry(ticker: str, max_retries: int = 3):
             if attempt == max_retries - 1:
                 raise
             wait = 2 ** attempt
-            print(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait}s...")
+            logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait}s...")
             time.sleep(wait)
 
 def ingest_stock(ticker: str):
@@ -54,7 +69,7 @@ def ingest_stock(ticker: str):
                              "volume": int(row["Volume"])
                          })
 
-    print(f"Done: {ticker}, {len(df)} rows inserted")
+    logger.info(f"Done: {ticker}, {len(df)} rows inserted")
 
 TICKERS = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
