@@ -16,3 +16,14 @@ CREATE TABLE IF NOT EXISTS daily_prices (
     volume BIGINT,
     UNIQUE(stock_id, date)
 );
+
+
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+    id SERIAL PRIMARY KEY,
+    run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    tickers_attempted INTEGER,
+    tickers_succeeded INTEGER,
+    rows_inserted INTEGER,
+    errors TEXT
+);
+

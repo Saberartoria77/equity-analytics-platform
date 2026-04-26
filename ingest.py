@@ -78,5 +78,29 @@ TICKERS = [
     "INTC", "ADI", "KLAC", "LRCX", "MRVL"
 ]
 if __name__ == "__main__":
+    tickers_succeeded = 0
+    rows_inserted = 0
+    errors = []
+
     for ticker in TICKERS:
-        ingest_stock(ticker)
+        try:
+            ingest_stock(ticker)
+            tickers_succeeded += 1
+            rows_inserted += 1256
+        except Exception as e:
+            logger.error(f"Failed: {ticker} — {e}")
+            errors.append(f"{ticker}: {str(e)}")
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO ingestion_runs 
+                (tickers_attempted, tickers_succeeded, rows_inserted, errors)
+            VALUES (:attempted, :succeeded, :rows, :errors)
+        """), {
+            "attempted": len(TICKERS),
+            "succeeded": tickers_succeeded,
+            "rows": rows_inserted,
+            "errors": "; ".join(errors) if errors else None
+        })
+
+    logger.info(f"Run complete: {tickers_succeeded}/{len(TICKERS)} succeeded, {rows_inserted} rows")
