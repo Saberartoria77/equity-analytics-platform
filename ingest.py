@@ -72,10 +72,28 @@ def ingest_stock(ticker: str):
     logger.info(f"Done: {ticker}, {len(df)} rows inserted")
 
 TICKERS = [
+    # Tech
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
     "META", "TSLA", "AVGO", "ORCL", "ASML",
     "AMD", "QCOM", "TXN", "MU", "AMAT",
-    "INTC", "ADI", "KLAC", "LRCX", "MRVL"
+    "INTC", "ADI", "KLAC", "LRCX", "MRVL",
+    "CRM", "ADBE", "NOW", "UBER", "PANW",
+    "CRWD", "ABNB", "SHOP", "ANET", "SNAP",
+    "PLTR", "NET", "DDOG", "ZS", "MDB",
+    "SNOW", "COIN", "DASH", "RBLX", "PINS",
+    "TTD", "TEAM", "HUBS", "VEEV", "BILL",
+    "OKTA", "ZM", "ROKU", "HOOD", "SOFI",
+    # Finance
+    "JPM", "BAC", "WFC", "GS", "MS",
+    "C", "BLK", "SCHW", "AXP", "USB",
+    "PNC", "TFC", "COF", "BK", "STT",
+    "FITB", "HBAN", "CFG", "RF", "KEY",
+    "V", "MA", "PYPL", "FIS", "FISV",
+    "ICE", "CME", "MCO", "SPGI", "MSCI",
+    "AIG", "MET", "PRU", "AFL", "TRV",
+    "PGR", "ALL", "CB", "CINF", "AON",
+    "BRO", "WTW", "RJF", "LPLA", "IBKR",
+    "NDAQ", "CBOE", "FDS", "MKTX", "VIRT",
 ]
 if __name__ == "__main__":
     tickers_succeeded = 0
