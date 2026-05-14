@@ -52,15 +52,19 @@ def backtest(df):
     return returns
 
 
-
 if __name__ == "__main__":
-    df = get_backtest_data("AAPL")
-    returns = backtest(df)
+    tickers = ["AAPL", "NVDA", "TSLA", "MSFT"]
 
-    print(f"=== RSI Strategy ===")
-    print(f"Total trades: {len(returns)}")
-    print(f"Average return per trade: {sum(returns) / len(returns):.2f}%")
-    print(f"Total return: {sum(returns):.2f}%")
+    for ticker in tickers:
+        df = get_backtest_data(ticker)
+        if df.empty:
+            continue
+        returns = backtest(df)
+        if len(returns) == 0:
+            print(f"{ticker}: No trades triggered")
+            continue
+        buy_hold = (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
+        print(f"{ticker} | Trades: {len(returns)} | RSI return: {sum(returns):.1f}% | Buy&Hold: {buy_hold:.1f}%")
 
     # Buy & Hold
     buy_hold = (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
