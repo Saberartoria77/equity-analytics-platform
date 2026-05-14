@@ -116,3 +116,13 @@ WHERE i.date = (SELECT MAX(date) FROM indicators)
   AND i.rsi_14 < 40
   AND dp.close > i.sma_200
 ORDER BY i.rsi_14 ASC;
+
+
+-- data table
+SELECT dp.date, dp.close, i.rsi_14
+FROM daily_prices dp
+JOIN indicators i ON dp.stock_id = i.stock_id AND dp.date = i.date
+JOIN stocks s ON s.id = dp.stock_id
+WHERE s.ticker = 'AAPL'
+ORDER BY dp.date
+LIMIT 20;

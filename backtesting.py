@@ -56,6 +56,13 @@ def backtest(df):
 if __name__ == "__main__":
     df = get_backtest_data("AAPL")
     returns = backtest(df)
+
+    print(f"=== RSI Strategy ===")
     print(f"Total trades: {len(returns)}")
-    print(f"Average return per trade: {sum(returns)/len(returns):.2f}%")
+    print(f"Average return per trade: {sum(returns) / len(returns):.2f}%")
     print(f"Total return: {sum(returns):.2f}%")
+
+    # Buy & Hold
+    buy_hold = (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
+    print(f"\n=== Buy & Hold ===")
+    print(f"Total return: {buy_hold:.2f}%")
