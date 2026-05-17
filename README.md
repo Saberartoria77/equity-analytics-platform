@@ -50,6 +50,21 @@ Alpha Vantage         daily_returns_view
 6. Run schema: `psql -U postgres -d equity_analytics -f schema.sql`
 7. Run ingestion: `python ingest.py`
 
+## Backtest Results (RSI Strategy)
+
+**Strategy**: Buy when RSI < 30, Sell when RSI > 70  
+**Transaction cost**: 1.5% per trade (Wealthsimple CAD account FX fee)  
+**Metrics**: Win rate, Sharpe ratio, Max drawdown
+
+| Ticker | Trades | RSI Return | Buy & Hold | Win% | Sharpe | Max Drawdown |
+|--------|--------|------------|------------|------|--------|--------------|
+| AAPL   | 5      | 20.2%      | 101.1%     | 100% | 1.17   | 0%           |
+| NVDA   | 2      | 7.4%       | 870.5%     | 50%  | 0.07   | 33.1%        |
+| TSLA   | 5      | 24.1%      | 70.1%      | 60%  | 0.23   | 23.3%        |
+| MSFT   | 4      | 7.9%       | 41.9%      | 50%  | 0.14   | 13.8%        |
+
+**Key finding**: RSI mean-reversion strategy consistently underperforms buy & hold. FX fees significantly erode returns — AAPL return dropped from 34% to 20% after applying Wealthsimple's 1.5% CAD account FX fee.
+
 ## Roadmap
 
 - [x] Project setup
@@ -61,7 +76,7 @@ Alpha Vantage         daily_returns_view
 - [x] Daily returns view
 - [x] Rolling volatility view
 - [x] Automated scheduler
-- [ ] Technical indicators (SMA, RSI, Bollinger Bands)
-- [ ] Backtesting engine
+- [x] Technical indicators (SMA, RSI, Bollinger Bands)
+- [x] Backtesting engine
 - [ ] Streamlit dashboard
 - [ ] Deployment
