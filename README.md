@@ -76,7 +76,7 @@ Alpha Vantage         daily_returns_view
 - [x] Daily returns view
 - [x] Rolling volatility view
 - [x] Automated scheduler
-- [ ] Technical indicators (SMA, RSI, Bollinger Bands)
-- [ ] Backtesting engine
+- [x] Technical indicators (SMA, RSI, Bollinger Bands)
+- [x] Backtesting engine
 - [ ] Streamlit dashboard
 - [ ] Deployment
