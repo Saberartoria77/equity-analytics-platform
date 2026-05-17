@@ -46,10 +46,46 @@ def backtest(df):
         elif row["rsi_14"]>70 and in_position:
 
             in_position = False
-            pnl = (row["close"] - buy_price) / buy_price * 100
+            cost = 1.5  # Wealthsimple FX fee per trade (CAD account)
+            pnl = (row["close"] - buy_price) / buy_price * 100 - (cost * 2)
             returns.append(pnl)
 
     return returns
+
+
+
+def compute_metrics(returns):
+    if len(returns) == 0:
+        return {}
+
+    win_rate = len([r for r in returns if r > 0]) / len(returns) * 100
+    avg_return = sum(returns) / len(returns)
+
+    # Sharpe ratio (simplified, assuming risk-free rate = 0)
+    import statistics
+    if len(returns) > 1:
+        sharpe = avg_return / statistics.stdev(returns)
+    else:
+        sharpe = 0
+
+    # Max drawdown
+    cumulative = 0
+    peak = 0
+    max_dd = 0
+    for r in returns:
+        cumulative += r
+        if cumulative > peak:
+            peak = cumulative
+        drawdown = peak - cumulative
+        if drawdown > max_dd:
+            max_dd = drawdown
+
+    return {
+        "win_rate": round(win_rate, 1),
+        "sharpe": round(sharpe, 2),
+        "max_drawdown": round(max_dd, 2)
+    }
+
 
 
 if __name__ == "__main__":
@@ -63,10 +99,6 @@ if __name__ == "__main__":
         if len(returns) == 0:
             print(f"{ticker}: No trades triggered")
             continue
+        metrics = compute_metrics(returns)
         buy_hold = (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
-        print(f"{ticker} | Trades: {len(returns)} | RSI return: {sum(returns):.1f}% | Buy&Hold: {buy_hold:.1f}%")
-
-    # Buy & Hold
-    buy_hold = (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
-    print(f"\n=== Buy & Hold ===")
-    print(f"Total return: {buy_hold:.2f}%")
+        print(f"{ticker} | Trades: {len(returns)} | Return: {sum(returns):.1f}% | B&H: {buy_hold:.1f}% | Win%: {metrics['win_rate']} | Sharpe: {metrics['sharpe']} | MaxDD: {metrics['max_drawdown']}%")
