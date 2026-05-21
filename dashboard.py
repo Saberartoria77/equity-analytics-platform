@@ -10,7 +10,7 @@ DB_URL = os.getenv("DB_URL")
 engine = create_engine(DB_URL)
 
 st.title("Equity Analytics Platform")
-page = st.sidebar.selectbox("Navigation", ["Price & Indicators", "Backtest Results"])
+page = st.sidebar.selectbox("Navigation", ["Price & Indicators", "Backtest Results", "Sector Analysis"])
 
 # Ticker selector
 tickers = pd.read_sql(text("SELECT ticker FROM stocks ORDER BY ticker"), engine)["ticker"].tolist()
@@ -94,3 +94,38 @@ elif page == "Backtest Results":
                 template="plotly_dark"
             )
             st.plotly_chart(fig3, use_container_width=True)
+elif page == "Sector Analysis":
+    st.header("Sector Analysis")
+
+    # Sector average daily return
+    df_sector = pd.read_sql(text("""
+        SELECT 
+            s.sector,
+            ROUND(AVG(dr.daily_return_pct)::numeric, 4) AS avg_daily_return,
+            COUNT(DISTINCT s.id) AS num_stocks
+        FROM daily_returns_view dr
+        JOIN stocks s ON s.id = dr.stock_id
+        WHERE dr.daily_return_pct IS NOT NULL
+          AND s.sector IS NOT NULL
+        GROUP BY s.sector
+        ORDER BY avg_daily_return DESC
+    """), engine)
+
+    fig4 = go.Figure(go.Bar(
+        x=df_sector["sector"],
+        y=df_sector["avg_daily_return"],
+        marker_color=["green" if v > 0 else "red" for v in df_sector["avg_daily_return"]],
+        text=df_sector["num_stocks"].apply(lambda x: f"{x} stocks"),
+        textposition="outside"
+    ))
+    fig4.update_layout(
+        title="Average Daily Return by Sector",
+        xaxis_title="Sector",
+        yaxis_title="Avg Daily Return (%)",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig4, use_container_width=True)
+
+    # Sector table
+    st.subheader("Sector Summary")
+    st.dataframe(df_sector, use_container_width=True)
