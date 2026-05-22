@@ -6,6 +6,9 @@ A data engineering project that ingests equity market data into PostgreSQL and s
 
 ---
 
+## Live Demo
+https://saberartoria77-equity-analytics-platform-dashboard-yqyusj.streamlit.app/
+
 ## Architecture
 yfinance API → Python ingestion → PostgreSQL → SQL views → Streamlit dashboard
 ↑                  ↓
