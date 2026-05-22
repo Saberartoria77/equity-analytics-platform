@@ -126,3 +126,14 @@ JOIN stocks s ON s.id = dp.stock_id
 WHERE s.ticker = 'AAPL'
 ORDER BY dp.date
 LIMIT 20;
+
+
+SELECT
+    s.sector,
+    ROUND(AVG(dr.daily_return_pct)::numeric, 4) AS avg_daily_return,
+    COUNT(DISTINCT s.id) AS num_stocks
+FROM daily_returns_view dr
+JOIN stocks s ON s.id = dr.stock_id
+WHERE dr.daily_return_pct IS NOT NULL
+GROUP BY s.sector
+ORDER BY avg_daily_return DESC;

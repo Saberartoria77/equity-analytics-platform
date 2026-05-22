@@ -34,6 +34,19 @@ def get_backtest_data(ticker):
 
 
 def backtest(df):
+    """
+        RSI Mean-Reversion Strategy — Look-ahead Bias Analysis
+        -------------------------------------------------------
+        Signal generation (RSI) uses only data available at time T:
+        - RSI at row T is computed from close prices up to and including T
+        - Buy/sell decision at T uses RSI[T] and executes at close[T]
+
+        Potential bias: executing at same-day close after seeing RSI[T]
+        is a mild assumption — in practice, you'd execute next-day open.
+        This slightly overstates returns but is acceptable for a first model.
+
+        No future data is used in signal generation. ✓
+        """
     in_position = False
     buy_price = 0
     returns = []

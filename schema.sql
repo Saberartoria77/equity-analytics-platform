@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS ingestion_runs
     tickers_succeeded INTEGER,
     rows_inserted     INTEGER,
     errors            TEXT
-)
+);
 
 
 CREATE OR REPLACE VIEW daily_returns_view AS
@@ -54,3 +54,8 @@ SELECT
         )::numeric
     , 4) AS rolling_20d_volatility
 FROM daily_prices;
+
+
+ALTER TABLE stocks ADD COLUMN IF NOT EXISTS sector VARCHAR(100);
+ALTER TABLE stocks ADD COLUMN IF NOT EXISTS industry VARCHAR(100);
+
