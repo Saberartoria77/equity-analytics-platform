@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 load_dotenv()
-DB_URL = os.getenv("DB_URL") or st.secrets.get("DB_URL")
+try:
+    DB_URL = st.secrets["DB_URL"]
+except:
+    DB_URL = os.getenv("DB_URL")
 
 st.set_page_config(page_title="Equity Analytics Platform", layout="wide")
 st.title("Equity Analytics Platform")
