@@ -11,6 +11,8 @@ try:
 except:
     DB_URL = os.getenv("DB_URL")
 
+engine = create_engine(DB_URL)
+
 st.set_page_config(page_title="Equity Analytics Platform", layout="wide")
 st.title("Equity Analytics Platform")
 
