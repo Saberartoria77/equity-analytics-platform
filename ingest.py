@@ -5,10 +5,6 @@ from sqlalchemy import create_engine, text
 import yfinance as yf
 import time
 
-load_dotenv()
-DB_URL = os.getenv("DB_URL")
-engine = create_engine(DB_URL)
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -18,12 +14,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
 load_dotenv()
 DB_URL = os.getenv("DB_URL")
-
-DB_URL = DB_URL = "postgresql://postgres:Bernie1217@localhost:5432/equity_analytics"
+if not DB_URL:
+    raise RuntimeError(
+        "DB_URL not set. 在 .env 里填 —— 台式机填本地 Postgres,Mac/Colab 填 Railway 连接串。"
+    )
 engine = create_engine(DB_URL)
-
 
 
 def fetch_with_retry(ticker: str, max_retries: int = 3):
