@@ -2,7 +2,7 @@
 
 A data engineering project that ingests equity market data into PostgreSQL, computes technical indicators, backtests trading strategies, and surfaces insights via an interactive dashboard.
 
-**Tech stack**: Python · PostgreSQL · SQLAlchemy · yfinance · Pandas · NumPy · SciPy · Jupyter · Streamlit · Plotly · Railway
+**Tech stack**: Python · PostgreSQL · SQLAlchemy · yfinance · Pandas · NumPy · SciPy · Jupyter · Streamlit · Plotly · Railway - Neon
 
 ## Live Demo
 🔗 [equity-analytics-platform.streamlit.app](https://saberartoria77-equity-analytics-platform-dashboard-yqyusj.streamlit.app/)
@@ -13,7 +13,7 @@ A data engineering project that ingests equity market data into PostgreSQL, comp
 
 ```
 yfinance API ─┐
-              ├─► Python pipeline ─► PostgreSQL (Railway) ─► Streamlit dashboard
+              ├─► Python pipeline ─► PostgreSQL (Neon) ─► Streamlit dashboard
 Alpha Vantage ┘   retry · logging     tables · views          Price · Backtest
   (backup)        scheduling          indicators              · Sector
 ```
@@ -42,7 +42,7 @@ Alpha Vantage ┘   retry · logging     tables · views          Price · Backt
 - Universe: 100 S&P 500 stocks (tech + finance sectors)
 - History: 5 years daily OHLCV
 - Source: Yahoo Finance via yfinance · Alpha Vantage as backup
-- Hosted: Railway PostgreSQL
+- Hosted: Hosted: Neon (Postgres, serverless)
 
 ---
 
