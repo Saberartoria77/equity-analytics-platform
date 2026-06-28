@@ -121,7 +121,7 @@ The naive pooled test treats ~100 stocks that move together each day as independ
 - [x] Backtesting engine with metrics
 - [x] Strategy significance testing (t-test + bootstrap)
 - [x] Streamlit dashboard (3 pages)
-- [x] Cloud deployment (Railway + Streamlit Cloud)
+- [x] Cloud deployment (Neon + Streamlit Cloud)
 - [ ] Predictive model (scikit-learn)
 - [ ] Scheduled cloud pipeline (GitHub Actions)
 - [ ] AI-powered market commentary (Claude API)
