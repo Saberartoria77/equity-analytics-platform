@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
+DEFAULT_MIN_SUCCESS_RATE = 0.8
 
 TICKERS = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AVGO", "ORCL", "ASML",
@@ -152,11 +153,15 @@ def _start_run(engine: Engine, attempted: int) -> int:
 def _finish_run(
     engine: Engine,
     run_id: int,
+    attempted: int,
     succeeded: int,
     affected: int,
     errors: list[str],
+    min_success_rate: float,
 ) -> None:
-    status = "completed" if not errors else "partial"
+    status = ingestion_status(
+        attempted, succeeded, bool(errors), min_success_rate=min_success_rate
+    )
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -180,13 +185,37 @@ def _finish_run(
         )
 
 
-def is_material_failure(attempted: int, succeeded: int) -> bool:
-    """Treat a run as materially failed only when no requested ticker succeeded."""
-    return attempted > 0 and succeeded == 0
+def is_material_failure(
+    attempted: int,
+    succeeded: int,
+    min_success_rate: float = DEFAULT_MIN_SUCCESS_RATE,
+) -> bool:
+    """Return whether successful ticker coverage is below the required rate."""
+    if not 0 <= min_success_rate <= 1:
+        raise ValueError("min_success_rate must be between 0 and 1")
+    if attempted < 0 or not 0 <= succeeded <= attempted:
+        raise ValueError("attempted and succeeded counts are inconsistent")
+    return attempted > 0 and succeeded / attempted < min_success_rate
+
+
+def ingestion_status(
+    attempted: int,
+    succeeded: int,
+    has_errors: bool,
+    min_success_rate: float = DEFAULT_MIN_SUCCESS_RATE,
+) -> str:
+    """Return the persisted terminal status for an ingestion run."""
+    if is_material_failure(attempted, succeeded, min_success_rate):
+        return "failed"
+    if has_errors or succeeded < attempted:
+        return "partial"
+    return "completed"
 
 
 def run_ingestion(
-    engine: Engine, tickers: list[str] | None = None
+    engine: Engine,
+    tickers: list[str] | None = None,
+    min_success_rate: float = DEFAULT_MIN_SUCCESS_RATE,
 ) -> tuple[int, list[str], int]:
     """Run ingestion and return affected rows, errors, and successful tickers."""
     selected = TICKERS if tickers is None else tickers
@@ -208,16 +237,29 @@ def run_ingestion(
         except Exception as error:
             logger.exception("Failed to ingest %s", ticker)
             errors.append(f"{ticker}: {error}")
-    _finish_run(engine, run_id, succeeded, affected, errors)
+    _finish_run(
+        engine,
+        run_id,
+        len(selected),
+        succeeded,
+        affected,
+        errors,
+        min_success_rate,
+    )
     return affected, errors, succeeded
 
 
 def main() -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    affected, errors, succeeded = run_ingestion(create_db_engine())
+    min_success_rate = float(
+        os.getenv("MIN_INGEST_SUCCESS_RATE", str(DEFAULT_MIN_SUCCESS_RATE))
+    )
+    affected, errors, succeeded = run_ingestion(
+        create_db_engine(), min_success_rate=min_success_rate
+    )
     logger.info("Ingestion complete: %s rows affected, %s errors", affected, len(errors))
-    return int(is_material_failure(len(TICKERS), succeeded))
+    return int(is_material_failure(len(TICKERS), succeeded, min_success_rate))
 
 
 if __name__ == "__main__":

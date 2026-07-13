@@ -39,3 +39,10 @@ def test_notebook_uses_robust_shared_statistics():
     assert "hac_mean_test" in source
     assert "moving_block_bootstrap_mean" in source
     assert "stats.ttest_1samp" not in source
+
+
+def test_readme_documents_premium_adjusted_fallback():
+    readme = read("README.md").lower()
+
+    assert "premium alpha vantage" in readme
+    assert "min_ingest_success_rate" in readme

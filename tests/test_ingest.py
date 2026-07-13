@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ingest import ingest_stock, is_material_failure
+from ingest import ingest_stock, ingestion_status, is_material_failure
 
 
 class FakeResult:
@@ -73,4 +73,13 @@ def test_ingestion_returns_zero_for_empty_frame():
 
 def test_partial_ticker_failure_is_not_material_pipeline_failure():
     assert is_material_failure(attempted=100, succeeded=99) is False
+    assert is_material_failure(attempted=100, succeeded=80) is False
+    assert is_material_failure(attempted=100, succeeded=79) is True
+    assert is_material_failure(attempted=100, succeeded=1) is True
     assert is_material_failure(attempted=100, succeeded=0) is True
+
+
+def test_ingestion_status_persists_failed_below_threshold():
+    assert ingestion_status(100, 100, False) == "completed"
+    assert ingestion_status(100, 99, True) == "partial"
+    assert ingestion_status(100, 10, True) == "failed"

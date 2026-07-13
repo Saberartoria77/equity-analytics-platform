@@ -19,6 +19,7 @@ jobs:
     env:
       DB_URL: ${{ secrets.DB_URL }}
       ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
+      MIN_INGEST_SUCCESS_RATE: ${{ vars.MIN_INGEST_SUCCESS_RATE || '0.8' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

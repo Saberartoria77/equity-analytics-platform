@@ -60,12 +60,15 @@ streamlit run dashboard.py
 ```
 
 Set `ALPHA_VANTAGE_KEY` to enable fallback requests after Yahoo Finance retries are exhausted.
+The fallback uses adjusted OHLC data and therefore requires a **premium Alpha Vantage** key;
+a free-tier key will fail safely without overwriting Yahoo's adjusted history.
 
 ## Automated workflows
 
 - `ci.yml` lints, tests, compiles Python, and applies the schema to PostgreSQL 16.
 - `daily-pipeline.yml` supports manual and scheduled ingestion using the `DB_URL` repository secret and optional `ALPHA_VANTAGE_KEY`.
 - The local scheduler supports `PIPELINE_TIME`, `PIPELINE_TIMEZONE`, and `PIPELINE_TIMEOUT_SECONDS`.
+- `MIN_INGEST_SUCCESS_RATE` controls the production failure threshold and defaults to `0.8`; runs below it persist `failed` and exit non-zero.
 
 ## Verification
 
