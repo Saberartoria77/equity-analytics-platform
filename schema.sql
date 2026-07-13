@@ -50,17 +50,122 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
 );
 
 -- Upgrade databases created by earlier project versions.
+-- Views must be dropped because PostgreSQL cannot reorder/rename their columns
+-- through CREATE OR REPLACE VIEW.
+DROP VIEW IF EXISTS rolling_volatility_view;
+DROP VIEW IF EXISTS daily_returns_view;
+
 ALTER TABLE stocks ADD COLUMN IF NOT EXISTS sector VARCHAR(100);
 ALTER TABLE stocks ADD COLUMN IF NOT EXISTS industry VARCHAR(100);
+ALTER TABLE stocks ALTER COLUMN ticker TYPE VARCHAR(16);
+ALTER TABLE stocks ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at::timestamptz;
+UPDATE stocks SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
+ALTER TABLE stocks ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE stocks ALTER COLUMN created_at SET NOT NULL;
+
+ALTER TABLE daily_prices ALTER COLUMN id TYPE BIGINT;
+ALTER TABLE daily_prices ALTER COLUMN stock_id TYPE INTEGER USING stock_id::integer;
+ALTER TABLE daily_prices ALTER COLUMN open TYPE DOUBLE PRECISION USING open::double precision;
+ALTER TABLE daily_prices ALTER COLUMN high TYPE DOUBLE PRECISION USING high::double precision;
+ALTER TABLE daily_prices ALTER COLUMN low TYPE DOUBLE PRECISION USING low::double precision;
+ALTER TABLE daily_prices ALTER COLUMN close TYPE DOUBLE PRECISION USING close::double precision;
+ALTER TABLE daily_prices ALTER COLUMN volume TYPE BIGINT;
+ALTER TABLE daily_prices ALTER COLUMN stock_id SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN date SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN open SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN high SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN low SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN close SET NOT NULL;
+ALTER TABLE daily_prices ALTER COLUMN volume SET NOT NULL;
+ALTER TABLE daily_prices DROP CONSTRAINT IF EXISTS daily_prices_stock_id_fkey;
+ALTER TABLE daily_prices ADD CONSTRAINT daily_prices_stock_id_fkey
+    FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE CASCADE;
+ALTER SEQUENCE daily_prices_id_seq AS BIGINT;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'daily_prices'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%volume >= 0%'
+    ) THEN
+        ALTER TABLE daily_prices ADD CONSTRAINT daily_prices_volume_nonnegative
+            CHECK (volume >= 0);
+    END IF;
+END
+$$;
+
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'running';
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS rows_affected INTEGER DEFAULT 0;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'ingestion_runs'
+          AND column_name = 'run_at'
+    ) THEN
+        EXECUTE 'UPDATE ingestion_runs
+                 SET started_at = run_at,
+                     completed_at = COALESCE(completed_at, run_at),
+                     status = CASE
+                         WHEN errors IS NULL OR errors = '''' THEN ''completed''
+                         ELSE ''partial''
+                     END
+                 WHERE run_at IS NOT NULL';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'ingestion_runs'
+          AND column_name = 'rows_inserted'
+    ) THEN
+        EXECUTE 'UPDATE ingestion_runs SET rows_affected = COALESCE(rows_inserted, 0)';
+    END IF;
+END
+$$;
+
+UPDATE ingestion_runs
+SET started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+    status = COALESCE(
+        status,
+        CASE WHEN errors IS NULL OR errors = '' THEN 'completed' ELSE 'partial' END
+    ),
+    tickers_attempted = COALESCE(tickers_attempted, 0),
+    tickers_succeeded = COALESCE(tickers_succeeded, 0),
+    rows_affected = COALESCE(rows_affected, 0);
+ALTER TABLE ingestion_runs ALTER COLUMN id TYPE BIGINT;
+ALTER TABLE ingestion_runs ALTER COLUMN started_at SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE ingestion_runs ALTER COLUMN started_at SET NOT NULL;
+ALTER TABLE ingestion_runs ALTER COLUMN status SET DEFAULT 'running';
+ALTER TABLE ingestion_runs ALTER COLUMN status SET NOT NULL;
+ALTER TABLE ingestion_runs ALTER COLUMN tickers_attempted SET DEFAULT 0;
+ALTER TABLE ingestion_runs ALTER COLUMN tickers_attempted SET NOT NULL;
+ALTER TABLE ingestion_runs ALTER COLUMN tickers_succeeded SET DEFAULT 0;
+ALTER TABLE ingestion_runs ALTER COLUMN tickers_succeeded SET NOT NULL;
+ALTER TABLE ingestion_runs ALTER COLUMN rows_affected SET DEFAULT 0;
+ALTER TABLE ingestion_runs ALTER COLUMN rows_affected SET NOT NULL;
+ALTER TABLE ingestion_runs DROP COLUMN IF EXISTS run_at;
+ALTER TABLE ingestion_runs DROP COLUMN IF EXISTS rows_inserted;
+ALTER SEQUENCE ingestion_runs_id_seq AS BIGINT;
+
 -- Retrofit the table that older versions allowed Pandas to create without
 -- defaults, a primary key, a foreign key, or stock/date uniqueness.
 CREATE SEQUENCE IF NOT EXISTS indicators_id_seq OWNED BY indicators.id;
 ALTER TABLE indicators ALTER COLUMN id SET DEFAULT nextval('indicators_id_seq');
+ALTER TABLE indicators ALTER COLUMN id TYPE BIGINT;
+ALTER TABLE indicators ALTER COLUMN stock_id TYPE INTEGER USING stock_id::integer;
+ALTER TABLE indicators ALTER COLUMN sma_20 TYPE DOUBLE PRECISION USING sma_20::double precision;
+ALTER TABLE indicators ALTER COLUMN sma_50 TYPE DOUBLE PRECISION USING sma_50::double precision;
+ALTER TABLE indicators ALTER COLUMN sma_200 TYPE DOUBLE PRECISION USING sma_200::double precision;
+ALTER TABLE indicators ALTER COLUMN rsi_14 TYPE DOUBLE PRECISION USING rsi_14::double precision;
+ALTER TABLE indicators ALTER COLUMN macd_line TYPE DOUBLE PRECISION USING macd_line::double precision;
+ALTER TABLE indicators ALTER COLUMN macd_signal TYPE DOUBLE PRECISION USING macd_signal::double precision;
+ALTER TABLE indicators ALTER COLUMN macd_histogram TYPE DOUBLE PRECISION USING macd_histogram::double precision;
+ALTER TABLE indicators ALTER COLUMN bb_upper TYPE DOUBLE PRECISION USING bb_upper::double precision;
+ALTER TABLE indicators ALTER COLUMN bb_middle TYPE DOUBLE PRECISION USING bb_middle::double precision;
+ALTER TABLE indicators ALTER COLUMN bb_lower TYPE DOUBLE PRECISION USING bb_lower::double precision;
 ALTER TABLE indicators ALTER COLUMN id SET NOT NULL;
 ALTER TABLE indicators ALTER COLUMN stock_id SET NOT NULL;
 ALTER TABLE indicators ALTER COLUMN date SET NOT NULL;

@@ -31,3 +31,17 @@ def test_existing_indicator_table_is_retrofitted_with_constraints():
     assert "ALTER TABLE indicators ALTER COLUMN date SET NOT NULL" in SCHEMA
     assert "ADD CONSTRAINT uq_indicators_stock_date" in SCHEMA
     assert "ADD CONSTRAINT fk_indicators_stock" in SCHEMA
+
+
+def test_legacy_views_are_dropped_before_recreation():
+    drop_volatility = SCHEMA.index("DROP VIEW IF EXISTS rolling_volatility_view")
+    drop_returns = SCHEMA.index("DROP VIEW IF EXISTS daily_returns_view")
+    create_returns = SCHEMA.index("CREATE OR REPLACE VIEW daily_returns_view")
+
+    assert drop_volatility < drop_returns < create_returns
+
+
+def test_legacy_price_table_is_hardened_to_canonical_constraints():
+    assert "ALTER TABLE daily_prices ALTER COLUMN stock_id SET NOT NULL" in SCHEMA
+    assert "ALTER TABLE daily_prices ALTER COLUMN close TYPE DOUBLE PRECISION" in SCHEMA
+    assert "ON DELETE CASCADE" in SCHEMA

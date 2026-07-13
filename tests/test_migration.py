@@ -1,6 +1,6 @@
 import pandas as pd
 
-from migrate_to_railway import normalize_migration_frame, reset_sequences
+from migrate_to_railway import natural_key_for, normalize_migration_frame, reset_sequences
 
 
 class RecordingConnection:
@@ -61,3 +61,9 @@ def test_legacy_ingestion_runs_are_mapped_to_new_columns():
     assert normalized.loc[0, "completed_at"] == legacy.loc[0, "run_at"]
     assert normalized.loc[0, "rows_affected"] == 125_000
     assert normalized.loc[0, "status"] == "partial"
+
+
+def test_market_tables_migrate_by_natural_keys():
+    assert natural_key_for("stocks") == ("ticker",)
+    assert natural_key_for("daily_prices") == ("stock_id", "date")
+    assert natural_key_for("indicators") == ("stock_id", "date")

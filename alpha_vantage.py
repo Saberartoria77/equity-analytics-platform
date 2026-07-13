@@ -22,17 +22,22 @@ def fetch_daily(
     if not api_key:
         raise AlphaVantageError("ALPHA_VANTAGE_KEY is required for fallback requests")
 
-    response = session.get(
-        API_URL,
-        params={
-            "function": "TIME_SERIES_DAILY",
-            "symbol": ticker,
-            "outputsize": "full",
-            "apikey": api_key,
-        },
-        timeout=timeout,
-    )
-    response.raise_for_status()
+    try:
+        response = session.get(
+            API_URL,
+            params={
+                "function": "TIME_SERIES_DAILY_ADJUSTED",
+                "symbol": ticker,
+                "outputsize": "full",
+                "apikey": api_key,
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        raise AlphaVantageError(
+            f"Alpha Vantage HTTP request failed: {type(error).__name__}"
+        ) from None
     payload = response.json()
     for error_key in ("Error Message", "Note", "Information"):
         if error_key in payload:
@@ -44,14 +49,17 @@ def fetch_daily(
 
     rows = []
     for date, values in time_series.items():
+        raw_close = float(values["4. close"])
+        adjusted_close = float(values["5. adjusted close"])
+        adjustment_factor = adjusted_close / raw_close
         rows.append(
             {
                 "date": pd.Timestamp(date),
-                "Open": float(values["1. open"]),
-                "High": float(values["2. high"]),
-                "Low": float(values["3. low"]),
-                "Close": float(values["4. close"]),
-                "Volume": float(values["5. volume"]),
+                "Open": float(values["1. open"]) * adjustment_factor,
+                "High": float(values["2. high"]) * adjustment_factor,
+                "Low": float(values["3. low"]) * adjustment_factor,
+                "Close": adjusted_close,
+                "Volume": float(values["6. volume"]),
             }
         )
     return pd.DataFrame(rows).set_index("date").sort_index()

@@ -83,7 +83,7 @@ Configure `DB_URL` in Streamlit secrets. To use the dashboard as a public portfo
 
 ## Roadmap
 
-- Scheduled production ingestion
+- Production monitoring and alerting
 - Predictive modeling
 - Text-to-SQL exploration
 - Containerized deployment

@@ -66,11 +66,8 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_indicators(engine: Engine, stock_id: int, df: pd.DataFrame) -> int:
-    """Upsert fully initialized indicator rows and return affected-row count."""
+    """Transactionally replace one stock's complete valid indicator set."""
     ready = df.dropna(subset=["sma_200"]).copy()
-    if ready.empty:
-        return 0
-
     columns = [
         "sma_20",
         "sma_50",
@@ -103,31 +100,40 @@ def save_indicators(engine: Engine, stock_id: int, df: pd.DataFrame) -> int:
         """
     )
     with engine.begin() as connection:
+        connection.execute(
+            text("DELETE FROM indicators WHERE stock_id = :sid"), {"sid": stock_id}
+        )
+        if ready.empty:
+            return 0
         result = connection.execute(statement, records)
     return result.rowcount
 
 
-def run(engine: Engine) -> int:
-    """Recompute indicators for every stock and return affected rows."""
+def run(engine: Engine) -> tuple[int, list[str]]:
+    """Recompute every stock and return affected rows plus failures."""
     stock_ids = pd.read_sql(text("SELECT id FROM stocks ORDER BY id"), engine)["id"].tolist()
     total = 0
+    errors: list[str] = []
     for stock_id in stock_ids:
         try:
             frame = compute_indicators(get_prices(engine, stock_id))
             affected = save_indicators(engine, stock_id, frame)
             total += affected
             logger.info("Saved %s indicator rows for stock_id %s", affected, stock_id)
-        except Exception:
+        except Exception as error:
             logger.exception("Failed stock_id %s", stock_id)
-    return total
+            errors.append(f"stock_id {stock_id}: {error}")
+    return total, errors
 
 
 def main() -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    total = run(create_db_engine())
-    logger.info("Indicator refresh complete: %s rows affected", total)
-    return 0
+    total, errors = run(create_db_engine())
+    logger.info(
+        "Indicator refresh complete: %s rows affected, %s errors", total, len(errors)
+    )
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

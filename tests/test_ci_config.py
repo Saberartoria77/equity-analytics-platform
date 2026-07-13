@@ -10,11 +10,13 @@ def test_ci_runs_lint_tests_compile_and_schema():
         "python-version: \"3.11\"",
         "postgres:16",
         "ruff check .",
-        "pytest",
+        "python -m pytest",
         "compileall",
         "psql",
     ]:
         assert expected in ci
+    assert "ON_ERROR_STOP=1" in ci
+    assert "tests/fixtures/legacy_schema.sql" in ci
 
 
 def test_daily_workflow_runs_the_complete_pipeline():

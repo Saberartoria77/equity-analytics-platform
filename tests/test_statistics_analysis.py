@@ -26,3 +26,8 @@ def test_moving_block_bootstrap_is_reproducible():
 def test_statistics_reject_empty_input():
     with pytest.raises(ValueError, match="at least one"):
         hac_mean_test(pd.Series(dtype=float))
+
+
+def test_statistics_reject_non_finite_input():
+    with pytest.raises(ValueError, match="at least one"):
+        hac_mean_test(pd.Series([np.inf, -np.inf, np.nan]))

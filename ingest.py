@@ -180,9 +180,16 @@ def _finish_run(
         )
 
 
-def run_ingestion(engine: Engine, tickers: list[str] | None = None) -> tuple[int, list[str]]:
-    """Run ingestion for a universe and return affected rows and errors."""
-    selected = tickers or TICKERS
+def is_material_failure(attempted: int, succeeded: int) -> bool:
+    """Treat a run as materially failed only when no requested ticker succeeded."""
+    return attempted > 0 and succeeded == 0
+
+
+def run_ingestion(
+    engine: Engine, tickers: list[str] | None = None
+) -> tuple[int, list[str], int]:
+    """Run ingestion and return affected rows, errors, and successful tickers."""
+    selected = TICKERS if tickers is None else tickers
     run_id = _start_run(engine, len(selected))
     api_key = os.getenv("ALPHA_VANTAGE_KEY")
     fallback = (
@@ -202,15 +209,15 @@ def run_ingestion(engine: Engine, tickers: list[str] | None = None) -> tuple[int
             logger.exception("Failed to ingest %s", ticker)
             errors.append(f"{ticker}: {error}")
     _finish_run(engine, run_id, succeeded, affected, errors)
-    return affected, errors
+    return affected, errors, succeeded
 
 
 def main() -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    affected, errors = run_ingestion(create_db_engine())
+    affected, errors, succeeded = run_ingestion(create_db_engine())
     logger.info("Ingestion complete: %s rows affected, %s errors", affected, len(errors))
-    return 1 if errors else 0
+    return int(is_material_failure(len(TICKERS), succeeded))
 
 
 if __name__ == "__main__":

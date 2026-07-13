@@ -85,7 +85,8 @@ def test_alpha_vantage_normalizes_daily_prices_and_uses_timeout():
                     "2. high": "102",
                     "3. low": "99",
                     "4. close": "101",
-                    "5. volume": "1000",
+                    "5. adjusted close": "50.5",
+                    "6. volume": "1000",
                 }
             }
         }
@@ -98,12 +99,13 @@ def test_alpha_vantage_normalizes_daily_prices_and_uses_timeout():
     assert session.request["timeout"] == 7
     assert "secret" not in session.request["url"]
     assert result.iloc[0].to_dict() == {
-        "Open": 100.0,
-        "High": 102.0,
-        "Low": 99.0,
-        "Close": 101.0,
+        "Open": 50.0,
+        "High": 51.0,
+        "Low": 49.5,
+        "Close": 50.5,
         "Volume": 1000.0,
     }
+    assert session.request["params"]["function"] == "TIME_SERIES_DAILY_ADJUSTED"
 
 
 def test_alpha_vantage_rejects_rate_limit_payload():

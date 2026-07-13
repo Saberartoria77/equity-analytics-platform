@@ -69,31 +69,110 @@ def normalize_migration_frame(table: str, frame: pd.DataFrame) -> pd.DataFrame:
     return normalized.drop(columns=["run_at", "rows_inserted"], errors="ignore")
 
 
-def migrate_table(local_engine: Engine, remote_engine: Engine, table: str) -> int:
-    """Copy one known table by primary key, updating existing rows."""
-    if table not in TABLES:
-        raise ValueError(f"Unsupported migration table: {table}")
-    frame = normalize_migration_frame(
-        table,
-        pd.read_sql(text(f"SELECT * FROM {table} ORDER BY id"), local_engine),
+def natural_key_for(table: str) -> tuple[str, ...]:
+    """Return the stable conflict key used by a migrated market-data table."""
+    keys = {
+        "stocks": ("ticker",),
+        "daily_prices": ("stock_id", "date"),
+        "indicators": ("stock_id", "date"),
+    }
+    try:
+        return keys[table]
+    except KeyError:
+        raise ValueError(f"No natural migration key for {table}") from None
+
+
+def migrate_stocks(local_engine: Engine, remote_engine: Engine) -> tuple[int, dict[int, int]]:
+    """Upsert stocks by ticker and return source-to-destination ID mapping."""
+    frame = pd.read_sql(text("SELECT * FROM stocks ORDER BY id"), local_engine)
+    if frame.empty:
+        return 0, {}
+    statement = text(
+        """
+        INSERT INTO stocks (ticker, name, sector, industry, created_at)
+        VALUES (:ticker, :name, :sector, :industry, COALESCE(:created_at, CURRENT_TIMESTAMP))
+        ON CONFLICT (ticker) DO UPDATE SET
+            name = EXCLUDED.name,
+            sector = EXCLUDED.sector,
+            industry = EXCLUDED.industry
+        RETURNING id
+        """
     )
+    stock_id_map: dict[int, int] = {}
+    with remote_engine.begin() as connection:
+        for record in frame.to_dict(orient="records"):
+            cleaned = _clean_record(record)
+            source_id = int(cleaned.pop("id"))
+            parameters = {
+                "ticker": cleaned["ticker"],
+                "name": cleaned.get("name"),
+                "sector": cleaned.get("sector"),
+                "industry": cleaned.get("industry"),
+                "created_at": cleaned.get("created_at"),
+            }
+            stock_id_map[source_id] = int(
+                connection.execute(statement, parameters).scalar_one()
+            )
+    return len(frame), stock_id_map
+
+
+def migrate_market_table(
+    local_engine: Engine,
+    remote_engine: Engine,
+    table: str,
+    stock_id_map: dict[int, int],
+) -> int:
+    """Upsert prices or indicators by remapped stock/date natural key."""
+    key_columns = natural_key_for(table)
+    if table == "stocks":
+        raise ValueError("Use migrate_stocks for the stocks table")
+    frame = pd.read_sql(text(f"SELECT * FROM {table} ORDER BY id"), local_engine)
     if frame.empty:
         return 0
+    frame = frame.drop(columns=["id"], errors="ignore")
+    frame["stock_id"] = frame["stock_id"].map(stock_id_map)
+    if frame["stock_id"].isna().any():
+        raise ValueError(f"{table} contains a stock_id absent from the stocks migration")
+    frame["stock_id"] = frame["stock_id"].astype(int)
     columns = frame.columns.tolist()
     assignments = ", ".join(
-        f"{column} = EXCLUDED.{column}" for column in columns if column != "id"
+        f"{column} = EXCLUDED.{column}"
+        for column in columns
+        if column not in key_columns
     )
     statement = text(
         f"""
         INSERT INTO {table} ({", ".join(columns)})
         VALUES ({", ".join(f":{column}" for column in columns)})
-        ON CONFLICT (id) DO UPDATE SET {assignments}
+        ON CONFLICT ({", ".join(key_columns)}) DO UPDATE SET {assignments}
         """
     )
     records = [_clean_record(record) for record in frame.to_dict(orient="records")]
     with remote_engine.begin() as connection:
         connection.execute(statement, records)
     return len(records)
+
+
+def replace_ingestion_runs(local_engine: Engine, remote_engine: Engine) -> int:
+    """Replace remote run history explicitly; it has no stable natural key."""
+    frame = normalize_migration_frame(
+        "ingestion_runs",
+        pd.read_sql(text("SELECT * FROM ingestion_runs ORDER BY id"), local_engine),
+    )
+    with remote_engine.begin() as connection:
+        connection.execute(text("DELETE FROM ingestion_runs"))
+        if frame.empty:
+            return 0
+        columns = frame.columns.tolist()
+        statement = text(
+            f"""
+            INSERT INTO ingestion_runs ({", ".join(columns)})
+            VALUES ({", ".join(f":{column}" for column in columns)})
+            """
+        )
+        records = [_clean_record(record) for record in frame.to_dict(orient="records")]
+        connection.execute(statement, records)
+    return len(frame)
 
 
 def reset_sequences(engine: Engine) -> None:
@@ -115,10 +194,18 @@ def reset_sequences(engine: Engine) -> None:
 
 
 def migrate(local_engine: Engine, remote_engine: Engine) -> MigrationSummary:
-    """Apply schema, copy tables in dependency order, and repair sequences."""
+    """Apply schema and migrate by natural keys with explicit history replacement."""
     apply_schema(remote_engine)
+    stock_count, stock_id_map = migrate_stocks(local_engine, remote_engine)
     counts = {
-        table: migrate_table(local_engine, remote_engine, table) for table in TABLES
+        "stocks": stock_count,
+        "daily_prices": migrate_market_table(
+            local_engine, remote_engine, "daily_prices", stock_id_map
+        ),
+        "indicators": migrate_market_table(
+            local_engine, remote_engine, "indicators", stock_id_map
+        ),
+        "ingestion_runs": replace_ingestion_runs(local_engine, remote_engine),
     }
     reset_sequences(remote_engine)
     return MigrationSummary(counts)

@@ -39,10 +39,16 @@ jobs:
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -v
+        run: python -m pytest -v
       - name: Compile
         run: python -m compileall -q .
       - name: Apply schema twice to verify idempotency
         run: |
-          psql -h localhost -U postgres -d equity_analytics_test -f schema.sql
-          psql -h localhost -U postgres -d equity_analytics_test -f schema.sql
+          psql --set=ON_ERROR_STOP=1 -h localhost -U postgres -d equity_analytics_test -f schema.sql
+          psql --set=ON_ERROR_STOP=1 -h localhost -U postgres -d equity_analytics_test -f schema.sql
+      - name: Upgrade representative legacy schema twice
+        run: |
+          createdb -h localhost -U postgres equity_analytics_legacy_test
+          psql --set=ON_ERROR_STOP=1 -h localhost -U postgres -d equity_analytics_legacy_test -f tests/fixtures/legacy_schema.sql
+          psql --set=ON_ERROR_STOP=1 -h localhost -U postgres -d equity_analytics_legacy_test -f schema.sql
+          psql --set=ON_ERROR_STOP=1 -h localhost -U postgres -d equity_analytics_legacy_test -f schema.sql

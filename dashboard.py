@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pandas as pd
@@ -12,6 +13,7 @@ from sqlalchemy import text
 from backtesting import run_backtest
 from database import create_db_engine, get_database_url
 
+logger = logging.getLogger(__name__)
 st.set_page_config(page_title="Equity Analytics Platform", layout="wide")
 
 
@@ -173,8 +175,9 @@ def main() -> None:
     try:
         database_url = configured_database_url()
         tickers = load_tickers(database_url)
-    except Exception as error:
-        st.error(f"The analytics database is unavailable: {error}")
+    except Exception:
+        logger.exception("The analytics database is unavailable")
+        st.error("The analytics database is unavailable. Check deployment configuration.")
         st.stop()
     if not tickers:
         st.warning("The database contains no stocks. Run the ingestion pipeline first.")
@@ -186,15 +189,17 @@ def main() -> None:
     if page == "Sector Analysis":
         try:
             render_sector_page(load_sector_data(database_url))
-        except Exception as error:
-            st.error(f"Sector data could not be loaded: {error}")
+        except Exception:
+            logger.exception("Sector data could not be loaded")
+            st.error("Sector data could not be loaded. Please try again later.")
         return
 
     ticker = st.selectbox("Select Stock", tickers)
     try:
         frame = load_stock_data(database_url, ticker)
-    except Exception as error:
-        st.error(f"Data for {ticker} could not be loaded: {error}")
+    except Exception:
+        logger.exception("Data for %s could not be loaded", ticker)
+        st.error(f"Data for {ticker} could not be loaded. Please try again later.")
         return
     if page == "Price & Indicators":
         render_price_page(frame, ticker)

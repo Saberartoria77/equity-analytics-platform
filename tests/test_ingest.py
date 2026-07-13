@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ingest import ingest_stock
+from ingest import ingest_stock, is_material_failure
 
 
 class FakeResult:
@@ -69,3 +69,8 @@ def test_ingestion_reports_database_affected_rows():
 
 def test_ingestion_returns_zero_for_empty_frame():
     assert ingest_stock(FakeEngine(), "AAPL", sample_prices().iloc[:0]) == 0
+
+
+def test_partial_ticker_failure_is_not_material_pipeline_failure():
+    assert is_material_failure(attempted=100, succeeded=99) is False
+    assert is_material_failure(attempted=100, succeeded=0) is True

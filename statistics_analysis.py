@@ -11,6 +11,7 @@ import statsmodels.api as sm
 
 def _clean_values(values: pd.Series) -> np.ndarray:
     cleaned = pd.Series(values, dtype=float).dropna().to_numpy()
+    cleaned = cleaned[np.isfinite(cleaned)]
     if cleaned.size == 0:
         raise ValueError("values must contain at least one finite observation")
     return cleaned
