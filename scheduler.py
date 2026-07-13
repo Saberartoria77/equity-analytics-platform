@@ -1,63 +1,68 @@
-import schedule
-import time
-import subprocess
+"""Daily orchestration for ingestion followed by indicator refresh."""
+
+from __future__ import annotations
+
 import logging
+import os
+import subprocess
 import sys
-from datetime import datetime
+import time
+from collections.abc import Callable
+from pathlib import Path
 
-# Configure logging to track task execution status
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("scheduler.log"),  # Save logs to a file
-        logging.StreamHandler(sys.stdout)  # Also output to console
-    ]
-)
+import schedule
+
+logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parent
+PIPELINE_SCRIPTS = ("ingest.py", "indicators.py")
 
 
-def run_ingestion():
-    """
-    Wrapper function to execute the ingestion script.
-    """
-    logging.info("Task started: Daily data ingestion.")
-    try:
-        # Using subprocess to run ingest.py as a separate process.
-        # This prevents environment pollution and handles memory better.
-        result = subprocess.run(
-            ["python", "ingest.py"],
-            capture_output=True,
-            text=True
-        )
+def run_pipeline(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    timeout: int = 3600,
+) -> bool:
+    """Run each pipeline stage sequentially, stopping on the first failure."""
+    for script_name in PIPELINE_SCRIPTS:
+        script = PROJECT_ROOT / script_name
+        logger.info("Starting pipeline stage: %s", script_name)
+        try:
+            result = runner(
+                [sys.executable, str(script)],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=PROJECT_ROOT,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            logger.exception("Pipeline stage could not complete: %s", script_name)
+            return False
+        if result.returncode != 0:
+            logger.error(
+                "Pipeline stage failed: %s (exit %s)\n%s",
+                script_name,
+                result.returncode,
+                result.stderr,
+            )
+            return False
+        logger.info("Completed pipeline stage: %s", script_name)
+    return True
 
-        if result.returncode == 0:
-            logging.info("Task completed successfully.")
-            # Optional: log the standard output if needed
-            # logging.debug(f"Output: {result.stdout}")
-        else:
-            logging.error(f"Task failed with exit code {result.returncode}.")
-            logging.error(f"Error Details:\n{result.stderr}")
 
-    except Exception as e:
-        logging.error(f"Unexpected error occurred in scheduler: {str(e)}")
-
-
-# --- Scheduling Configuration ---
-
-# Set the execution time (e.g., 02:00 AM)
-# This is typically when server load is low and daily data is fully available.
-TARGET_TIME = "02:00"
-
-schedule.every().day.at(TARGET_TIME).do(run_ingestion)
-
-logging.info(f"Scheduler initialized. Target time: {TARGET_TIME} every day.")
-
-if __name__ == "__main__":
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    target_time = os.getenv("PIPELINE_TIME", "02:00")
+    timezone = os.getenv("PIPELINE_TIMEZONE", "UTC")
+    timeout = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "3600"))
+    schedule.every().day.at(target_time, timezone).do(run_pipeline, timeout=timeout)
+    logger.info("Scheduler ready: daily at %s %s", target_time, timezone)
     try:
         while True:
             schedule.run_pending()
-            # Sleep for 60 seconds to minimize CPU usage.
-            # Precision isn't critical for a once-a-day task.
-            time.sleep(60)
+            time.sleep(30)
     except KeyboardInterrupt:
-        logging.info("Scheduler stopped by user.")
+        logger.info("Scheduler stopped")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
