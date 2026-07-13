@@ -1,18 +1,22 @@
 # equity-analytics-platform
 
-## 项目背景
-股票量化分析平台，PostgreSQL + Railway + Streamlit。
-用于 portfolio 展示，目标是 Spotify 2027 data engineering internship。
+## Project
 
-## 当前状态
-- 核心功能完成：ingest / indicators / backtesting / dashboard
-- 数据库在 Railway 上
+Portfolio equity-data pipeline using Python 3.11, PostgreSQL, SQLAlchemy, Pandas, Streamlit, and Plotly.
 
-## 待做
-- [ ] 练习窗口函数 SQL（queries.sql）
-- [ ] GitHub Actions 定时流水线
-- [ ] Text-to-SQL 接口
+## Source of truth
 
-## 常用上下文
-- 数据库：Railway PostgreSQL
-- Python 3.9 + SQLAlchemy + psycopg2
+- `schema.sql` owns every table, constraint, index, and analytical view.
+- Price and indicator persistence must use upserts because providers and calculations can change history.
+- Backtests use end-of-day signals only for subsequent returns.
+- Production database access must be lazy; pure calculations must import without `DB_URL`.
+
+## Verification
+
+Run `ruff check .`, `pytest -v`, and `python -m compileall -q .` before claiming completion. Tests must not use live providers or the production database.
+
+## Remaining roadmap
+
+- Predictive model
+- Text-to-SQL interface
+- Containerization
