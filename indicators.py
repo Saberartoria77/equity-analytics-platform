@@ -1,95 +1,134 @@
-import os
+"""Compute and persist technical indicators."""
+
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-load_dotenv()
-DB_URL = os.getenv("DB_URL")
-engine = create_engine(DB_URL)
+from database import create_db_engine
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[
-        logging.FileHandler("indicators.log"),
-        logging.StreamHandler()
-    ]
-)
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
+
 logger = logging.getLogger(__name__)
 
 
-#SMA
-def get_prices(stock_id):
-    df = pd.read_sql(
+def get_prices(engine: Engine, stock_id: int) -> pd.DataFrame:
+    """Load ordered closing prices for one stock."""
+    return pd.read_sql(
         text("SELECT date, close FROM daily_prices WHERE stock_id = :sid ORDER BY date"),
         engine,
-        params={"sid": stock_id}
+        params={"sid": stock_id},
     )
-    return df
 
-##compute indicator
-def compute_indicators(df):
-    df["sma_20"] = df["close"].rolling(20).mean()
-    df["sma_50"] = df["close"].rolling(50).mean()
-    df["sma_200"] = df["close"].rolling(100).mean()
 
-    delta = df["close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = (-delta).where(delta < 0, 0)
-    avg_gain = gain.ewm(alpha=1 / 14, min_periods=14).mean()
-    avg_loss = loss.ewm(alpha=1 / 14, min_periods=14).mean()
-    rs = avg_gain / avg_loss
-    df["rsi_14"] = 100 - 100 / (1 + rs)
+def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a date-sorted copy with conventional technical indicators."""
+    required = {"date", "close"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
 
-    ema_12 = df["close"].ewm(span=12).mean()
-    ema_26 = df["close"].ewm(span=26).mean()
-    df["macd_line"] = ema_12 - ema_26
-    df["macd_signal"] = df["macd_line"].ewm(span=9).mean()
-    df["macd_histogram"] = df["macd_line"] - df["macd_signal"]
-    df["bb_middle"] = df["sma_20"]
-    df["bb_upper"] = df["bb_middle"] + 2 * df["close"].rolling(20).std()
-    df["bb_lower"] = df["bb_middle"] - 2 * df["close"].rolling(20).std()
+    result = df.copy(deep=True).sort_values("date").reset_index(drop=True)
+    close = pd.to_numeric(result["close"], errors="raise")
 
-    return df
+    result["sma_20"] = close.rolling(window=20, min_periods=20).mean()
+    result["sma_50"] = close.rolling(window=50, min_periods=50).mean()
+    result["sma_200"] = close.rolling(window=200, min_periods=200).mean()
 
-def save_indicators(stock_id, df):
-    df = df.dropna(subset=["sma_200"])
-    with engine.begin() as conn:
-        for _, row in df.iterrows():
-            conn.execute(text("""
-                INSERT INTO indicators 
-                    (stock_id, date, sma_20, sma_50, sma_200, rsi_14,
-                     macd_line, macd_signal, macd_histogram,
-                     bb_upper, bb_middle, bb_lower)
-                VALUES (:sid, :date, :sma_20, :sma_50, :sma_200, :rsi_14,
-                        :macd_line, :macd_signal, :macd_histogram,
-                        :bb_upper, :bb_middle, :bb_lower)
-                ON CONFLICT (stock_id, date) DO NOTHING
-            """), {
-                "sid": stock_id,
-                "date": row["date"],
-                "sma_20": float(row["sma_20"]),
-                "sma_50": float(row["sma_50"]),
-                "sma_200": float(row["sma_200"]),
-                "rsi_14": float(row["rsi_14"]),
-                "macd_line": float(row["macd_line"]),
-                "macd_signal": float(row["macd_signal"]),
-                "macd_histogram": float(row["macd_histogram"]),
-                "bb_upper": float(row["bb_upper"]),
-                "bb_lower": float(row["bb_lower"]),
-                "bb_middle": float(row["bb_middle"]),
-            })
-    logger.info(f"Saved {len(df)} rows for stock_id {stock_id}")
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    avg_loss = loss.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    relative_strength = avg_gain / avg_loss.replace(0, float("nan"))
+    result["rsi_14"] = 100 - (100 / (1 + relative_strength))
+    result.loc[(avg_loss == 0) & (avg_gain > 0), "rsi_14"] = 100.0
+    result.loc[(avg_loss == 0) & (avg_gain == 0), "rsi_14"] = 50.0
+
+    ema_12 = close.ewm(span=12, adjust=False, min_periods=12).mean()
+    ema_26 = close.ewm(span=26, adjust=False, min_periods=26).mean()
+    result["macd_line"] = ema_12 - ema_26
+    result["macd_signal"] = result["macd_line"].ewm(
+        span=9, adjust=False, min_periods=9
+    ).mean()
+    result["macd_histogram"] = result["macd_line"] - result["macd_signal"]
+
+    rolling_std = close.rolling(window=20, min_periods=20).std()
+    result["bb_middle"] = result["sma_20"]
+    result["bb_upper"] = result["bb_middle"] + 2 * rolling_std
+    result["bb_lower"] = result["bb_middle"] - 2 * rolling_std
+    return result
+
+
+def save_indicators(engine: Engine, stock_id: int, df: pd.DataFrame) -> int:
+    """Upsert fully initialized indicator rows and return affected-row count."""
+    ready = df.dropna(subset=["sma_200"]).copy()
+    if ready.empty:
+        return 0
+
+    columns = [
+        "sma_20",
+        "sma_50",
+        "sma_200",
+        "rsi_14",
+        "macd_line",
+        "macd_signal",
+        "macd_histogram",
+        "bb_upper",
+        "bb_middle",
+        "bb_lower",
+    ]
+    records = [
+        {
+            "sid": stock_id,
+            "date": row["date"],
+            **{column: float(row[column]) for column in columns},
+        }
+        for _, row in ready.iterrows()
+    ]
+    assignments = ", ".join(f"{column} = EXCLUDED.{column}" for column in columns)
+    statement = text(
+        f"""
+        INSERT INTO indicators (
+            stock_id, date, {", ".join(columns)}
+        ) VALUES (
+            :sid, :date, {", ".join(f":{column}" for column in columns)}
+        )
+        ON CONFLICT (stock_id, date) DO UPDATE SET {assignments}
+        """
+    )
+    with engine.begin() as connection:
+        result = connection.execute(statement, records)
+    return result.rowcount
+
+
+def run(engine: Engine) -> int:
+    """Recompute indicators for every stock and return affected rows."""
+    stock_ids = pd.read_sql(text("SELECT id FROM stocks ORDER BY id"), engine)["id"].tolist()
+    total = 0
+    for stock_id in stock_ids:
+        try:
+            frame = compute_indicators(get_prices(engine, stock_id))
+            affected = save_indicators(engine, stock_id, frame)
+            total += affected
+            logger.info("Saved %s indicator rows for stock_id %s", affected, stock_id)
+        except Exception:
+            logger.exception("Failed stock_id %s", stock_id)
+    return total
+
+
+def main() -> int:
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    total = run(create_db_engine())
+    logger.info("Indicator refresh complete: %s rows affected", total)
+    return 0
 
 
 if __name__ == "__main__":
-    stock_ids = pd.read_sql(text("SELECT id FROM stocks"), engine)["id"].tolist()
-    for sid in stock_ids:
-        try:
-            df = get_prices(sid)
-            df = compute_indicators(df)
-            save_indicators(sid, df)
-        except Exception as e:
-            logger.error(f"Failed stock_id {sid}: {e}")
-    logger.info("All indicators computed.")
+    raise SystemExit(main())
