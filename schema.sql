@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS daily_prices (
 
 CREATE TABLE IF NOT EXISTS indicators (
     id BIGSERIAL PRIMARY KEY,
-    stock_id INTEGER NOT NULL REFERENCES stocks(id) ON DELETE CASCADE,
+    stock_id INTEGER NOT NULL,
     date DATE NOT NULL,
     sma_20 DOUBLE PRECISION,
     sma_50 DOUBLE PRECISION,
@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS indicators (
     bb_upper DOUBLE PRECISION,
     bb_middle DOUBLE PRECISION,
     bb_lower DOUBLE PRECISION,
-    UNIQUE(stock_id, date)
+    CONSTRAINT fk_indicators_stock
+        FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE CASCADE,
+    CONSTRAINT uq_indicators_stock_date UNIQUE(stock_id, date)
 );
 
 CREATE TABLE IF NOT EXISTS ingestion_runs (
@@ -54,6 +56,45 @@ ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ DEFAU
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'running';
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS rows_affected INTEGER DEFAULT 0;
+
+-- Retrofit the table that older versions allowed Pandas to create without
+-- defaults, a primary key, a foreign key, or stock/date uniqueness.
+CREATE SEQUENCE IF NOT EXISTS indicators_id_seq OWNED BY indicators.id;
+ALTER TABLE indicators ALTER COLUMN id SET DEFAULT nextval('indicators_id_seq');
+ALTER TABLE indicators ALTER COLUMN id SET NOT NULL;
+ALTER TABLE indicators ALTER COLUMN stock_id SET NOT NULL;
+ALTER TABLE indicators ALTER COLUMN date SET NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'indicators'::regclass AND contype = 'p'
+    ) THEN
+        ALTER TABLE indicators ADD CONSTRAINT indicators_pkey PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'indicators'::regclass AND conname = 'fk_indicators_stock'
+    ) THEN
+        ALTER TABLE indicators ADD CONSTRAINT fk_indicators_stock
+            FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'indicators'::regclass AND conname = 'uq_indicators_stock_date'
+    ) THEN
+        ALTER TABLE indicators ADD CONSTRAINT uq_indicators_stock_date
+            UNIQUE (stock_id, date);
+    END IF;
+END
+$$;
+
+SELECT setval(
+    pg_get_serial_sequence('indicators', 'id'),
+    COALESCE((SELECT MAX(id) FROM indicators), 1),
+    EXISTS (SELECT 1 FROM indicators)
+);
 
 CREATE INDEX IF NOT EXISTS idx_daily_prices_date ON daily_prices(date);
 CREATE INDEX IF NOT EXISTS idx_indicators_date ON indicators(date);

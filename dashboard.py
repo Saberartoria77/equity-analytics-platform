@@ -202,4 +202,5 @@ def main() -> None:
         render_backtest_page(frame, ticker)
 
 
-main()
+if __name__ == "__main__":
+    main()

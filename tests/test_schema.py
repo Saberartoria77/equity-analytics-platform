@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = (PROJECT_ROOT / "schema.sql").read_text(encoding="utf-8")
 
@@ -25,3 +24,10 @@ def test_volatility_view_uses_return_dispersion():
 
     assert "STDDEV(daily_return_pct)" in volatility_definition
     assert "STDDEV(close)" not in volatility_definition
+
+
+def test_existing_indicator_table_is_retrofitted_with_constraints():
+    assert "ALTER TABLE indicators ALTER COLUMN stock_id SET NOT NULL" in SCHEMA
+    assert "ALTER TABLE indicators ALTER COLUMN date SET NOT NULL" in SCHEMA
+    assert "ADD CONSTRAINT uq_indicators_stock_date" in SCHEMA
+    assert "ADD CONSTRAINT fk_indicators_stock" in SCHEMA

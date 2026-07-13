@@ -51,11 +51,32 @@ def _clean_record(record: dict[str, object]) -> dict[str, object]:
     }
 
 
+def normalize_migration_frame(table: str, frame: pd.DataFrame) -> pd.DataFrame:
+    """Map legacy table columns onto the canonical schema."""
+    normalized = frame.copy(deep=True)
+    if table != "ingestion_runs":
+        return normalized
+
+    if "started_at" not in normalized and "run_at" in normalized:
+        normalized["started_at"] = normalized["run_at"]
+    if "completed_at" not in normalized:
+        normalized["completed_at"] = normalized.get("run_at", normalized["started_at"])
+    if "rows_affected" not in normalized:
+        normalized["rows_affected"] = normalized.get("rows_inserted", 0)
+    if "status" not in normalized:
+        has_error = normalized["errors"].fillna("").astype(str).str.len() > 0
+        normalized["status"] = has_error.map({True: "partial", False: "completed"})
+    return normalized.drop(columns=["run_at", "rows_inserted"], errors="ignore")
+
+
 def migrate_table(local_engine: Engine, remote_engine: Engine, table: str) -> int:
     """Copy one known table by primary key, updating existing rows."""
     if table not in TABLES:
         raise ValueError(f"Unsupported migration table: {table}")
-    frame = pd.read_sql(text(f"SELECT * FROM {table} ORDER BY id"), local_engine)
+    frame = normalize_migration_frame(
+        table,
+        pd.read_sql(text(f"SELECT * FROM {table} ORDER BY id"), local_engine),
+    )
     if frame.empty:
         return 0
     columns = frame.columns.tolist()
