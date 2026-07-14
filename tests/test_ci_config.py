@@ -27,5 +27,10 @@ def test_daily_workflow_runs_the_complete_pipeline():
     assert "workflow_dispatch:" in workflow
     assert "schedule:" in workflow
     assert "secrets.DB_URL" in workflow
+    assert 'psql "$DB_URL" -v ON_ERROR_STOP=1 -f schema.sql' in workflow
     assert "python ingest.py" in workflow
     assert "python indicators.py" in workflow
+
+    migration = workflow.index('psql "$DB_URL" -v ON_ERROR_STOP=1 -f schema.sql')
+    ingestion = workflow.index("python ingest.py")
+    assert migration < ingestion
