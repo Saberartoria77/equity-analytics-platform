@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -123,7 +124,22 @@ def ingest_stock(engine: Engine, ticker: str, frame: pd.DataFrame) -> int:
             text(
                 """
                 INSERT INTO daily_prices (stock_id, date, open, high, low, close, volume)
-                VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
+                SELECT
+                    :stock_id,
+                    prices.date,
+                    prices.open,
+                    prices.high,
+                    prices.low,
+                    prices.close,
+                    prices.volume
+                FROM jsonb_to_recordset(CAST(:prices_json AS jsonb)) AS prices(
+                    date DATE,
+                    open DOUBLE PRECISION,
+                    high DOUBLE PRECISION,
+                    low DOUBLE PRECISION,
+                    close DOUBLE PRECISION,
+                    volume BIGINT
+                )
                 ON CONFLICT (stock_id, date) DO UPDATE SET
                     open = EXCLUDED.open,
                     high = EXCLUDED.high,
@@ -132,7 +148,10 @@ def ingest_stock(engine: Engine, ticker: str, frame: pd.DataFrame) -> int:
                     volume = EXCLUDED.volume
                 """
             ),
-            records,
+            {
+                "stock_id": stock_id,
+                "prices_json": json.dumps(records, default=str),
+            },
         )
     return result.rowcount
 

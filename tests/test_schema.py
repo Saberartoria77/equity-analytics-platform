@@ -45,3 +45,9 @@ def test_legacy_price_table_is_hardened_to_canonical_constraints():
     assert "ALTER TABLE daily_prices ALTER COLUMN stock_id SET NOT NULL" in SCHEMA
     assert "ALTER TABLE daily_prices ALTER COLUMN close TYPE DOUBLE PRECISION" in SCHEMA
     assert "ON DELETE CASCADE" in SCHEMA
+
+
+def test_schema_repairs_every_serial_sequence_after_legacy_upgrade():
+    for table in ["stocks", "daily_prices", "indicators", "ingestion_runs"]:
+        assert f"pg_get_serial_sequence('{table}', 'id')" in SCHEMA
+        assert f"SELECT MAX(id) FROM {table}" in SCHEMA

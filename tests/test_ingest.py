@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 from ingest import ingest_stock, ingestion_status, is_material_failure
@@ -14,15 +16,17 @@ class FakeResult:
 
 class FakeConnection:
     def __init__(self):
-        self.price_records = []
+        self.price_parameters = None
+        self.price_sql = ""
 
     def execute(self, statement, parameters=None):
         sql = str(statement)
         if "INSERT INTO stocks" in sql:
             return FakeResult(scalar_value=7, rowcount=1)
         if "INSERT INTO daily_prices" in sql:
-            self.price_records = parameters
-            return FakeResult(rowcount=len(parameters))
+            self.price_parameters = parameters
+            self.price_sql = sql
+            return FakeResult(rowcount=2)
         raise AssertionError(f"Unexpected SQL: {sql}")
 
 
@@ -64,7 +68,11 @@ def test_ingestion_reports_database_affected_rows():
     affected = ingest_stock(engine, "AAPL", sample_prices())
 
     assert affected == 2
-    assert len(engine.connection.price_records) == 2
+    assert "jsonb_to_recordset" in engine.connection.price_sql
+    assert isinstance(engine.connection.price_parameters, dict)
+    records = json.loads(engine.connection.price_parameters["prices_json"])
+    assert len(records) == 2
+    assert records[0]["date"] == "2025-01-02"
 
 
 def test_ingestion_returns_zero_for_empty_frame():

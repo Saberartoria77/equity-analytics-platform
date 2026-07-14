@@ -62,6 +62,11 @@ ALTER TABLE stocks ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at::ti
 UPDATE stocks SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
 ALTER TABLE stocks ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE stocks ALTER COLUMN created_at SET NOT NULL;
+SELECT setval(
+    pg_get_serial_sequence('stocks', 'id'),
+    COALESCE((SELECT MAX(id) FROM stocks), 1),
+    EXISTS (SELECT 1 FROM stocks)
+);
 
 ALTER TABLE daily_prices ALTER COLUMN id TYPE BIGINT;
 ALTER TABLE daily_prices ALTER COLUMN stock_id TYPE INTEGER USING stock_id::integer;
@@ -94,6 +99,11 @@ BEGIN
     END IF;
 END
 $$;
+SELECT setval(
+    pg_get_serial_sequence('daily_prices', 'id'),
+    COALESCE((SELECT MAX(id) FROM daily_prices), 1),
+    EXISTS (SELECT 1 FROM daily_prices)
+);
 
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
@@ -149,6 +159,11 @@ ALTER TABLE ingestion_runs ALTER COLUMN rows_affected SET NOT NULL;
 ALTER TABLE ingestion_runs DROP COLUMN IF EXISTS run_at;
 ALTER TABLE ingestion_runs DROP COLUMN IF EXISTS rows_inserted;
 ALTER SEQUENCE ingestion_runs_id_seq AS BIGINT;
+SELECT setval(
+    pg_get_serial_sequence('ingestion_runs', 'id'),
+    COALESCE((SELECT MAX(id) FROM ingestion_runs), 1),
+    EXISTS (SELECT 1 FROM ingestion_runs)
+);
 
 -- Retrofit the table that older versions allowed Pandas to create without
 -- defaults, a primary key, a foreign key, or stock/date uniqueness.
