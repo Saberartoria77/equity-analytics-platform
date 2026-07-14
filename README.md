@@ -47,6 +47,10 @@ The ticker list is a curated technology and financial-services universe. It is n
 
 Prerequisites: Python 3.11+, PostgreSQL, and `psql`.
 
+### One-time setup
+
+Run these commands only when setting up the project for the first time:
+
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
@@ -56,8 +60,28 @@ psql equity_analytics -f schema.sql
 export DB_URL=postgresql://localhost/equity_analytics
 python ingest.py
 python indicators.py
-streamlit run dashboard.py
 ```
+
+### Everyday dashboard shortcut
+
+You do not need to recreate the virtual environment, reinstall packages, recreate the
+database, or reload the data every time you open the dashboard. From the project
+directory, start it with one command:
+
+```bash
+source .venv/bin/activate && DB_URL=postgresql://localhost/equity_analytics streamlit run dashboard.py
+```
+
+The dashboard reads the data already stored in PostgreSQL. To refresh a local database
+manually, activate the environment, set `DB_URL`, and then run:
+
+```bash
+python ingest.py && python indicators.py
+```
+
+The GitHub daily workflow performs that refresh automatically for the configured remote
+database. If the dashboard uses Neon or another hosted PostgreSQL database, keep its
+connection URL in Streamlit secrets rather than committing it to the repository.
 
 Set `ALPHA_VANTAGE_KEY` to enable fallback requests after Yahoo Finance retries are exhausted.
 The fallback uses adjusted OHLC data and therefore requires a **premium Alpha Vantage** key;

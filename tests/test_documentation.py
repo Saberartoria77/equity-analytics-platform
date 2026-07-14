@@ -46,3 +46,12 @@ def test_readme_documents_premium_adjusted_fallback():
 
     assert "premium alpha vantage" in readme
     assert "min_ingest_success_rate" in readme
+
+
+def test_readme_separates_setup_from_everyday_dashboard_launch():
+    readme = read("README.md").lower()
+
+    assert "one-time setup" in readme
+    assert "everyday dashboard shortcut" in readme
+    assert "source .venv/bin/activate && db_url=" in readme
+    assert "you do not need to recreate" in readme
