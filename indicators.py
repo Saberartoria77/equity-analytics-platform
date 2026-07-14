@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -83,18 +84,27 @@ def save_indicators(engine: Engine, stock_id: int, df: pd.DataFrame) -> int:
     records = [
         {
             "sid": stock_id,
-            "date": row["date"],
+            "date": pd.Timestamp(row["date"]).date().isoformat(),
             **{column: float(row[column]) for column in columns},
         }
         for _, row in ready.iterrows()
     ]
     assignments = ", ".join(f"{column} = EXCLUDED.{column}" for column in columns)
+    record_columns = ", ".join(
+        f"{column} DOUBLE PRECISION" for column in columns
+    )
     statement = text(
         f"""
         INSERT INTO indicators (
             stock_id, date, {", ".join(columns)}
-        ) VALUES (
-            :sid, :date, {", ".join(f":{column}" for column in columns)}
+        )
+        SELECT
+            :sid,
+            computed.date,
+            {", ".join(f"computed.{column}" for column in columns)}
+        FROM jsonb_to_recordset(CAST(:indicators_json AS jsonb)) AS computed(
+            date DATE,
+            {record_columns}
         )
         ON CONFLICT (stock_id, date) DO UPDATE SET {assignments}
         """
@@ -105,7 +115,10 @@ def save_indicators(engine: Engine, stock_id: int, df: pd.DataFrame) -> int:
         )
         if ready.empty:
             return 0
-        result = connection.execute(statement, records)
+        result = connection.execute(
+            statement,
+            {"sid": stock_id, "indicators_json": json.dumps(records)},
+        )
     return result.rowcount
 
 

@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -53,7 +55,7 @@ class RecordingConnection:
     def execute(self, statement, parameters=None):
         self.statements.append((str(statement), parameters))
         if "INSERT INTO indicators" in str(statement):
-            return FakeResult(len(parameters))
+            return FakeResult(51)
         return FakeResult()
 
 
@@ -84,7 +86,12 @@ def test_indicator_refresh_deletes_legacy_rows_before_insert(price_frame):
 
     assert affected == 51
     assert "DELETE FROM indicators WHERE stock_id = :sid" in engine.connection.statements[0][0]
-    assert "INSERT INTO indicators" in engine.connection.statements[1][0]
+    insert_sql, insert_parameters = engine.connection.statements[1]
+    assert "INSERT INTO indicators" in insert_sql
+    assert "jsonb_to_recordset" in insert_sql
+    assert isinstance(insert_parameters, dict)
+    records = json.loads(insert_parameters["indicators_json"])
+    assert len(records) == 51
 
 
 def test_run_reports_per_stock_failures(monkeypatch, price_frame):
